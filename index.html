@@ -1,0 +1,357 @@
+<!DOCTYPE html PUBLIC *-//W3C//DTD XHTML 1.0 transitional//EN* "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="en-US">
+
+<head profile="http://gmpg.org/xfn/11">
+
+<meta http-equiv="Content-Type" content="text/html" charset="UTF-8" />
+<title>Nifty Photo Viewer</title>
+
+<link type="text/css" rel="stylesheet" href="assets/css/style.css" media="screen" />
+<link type="text/css" rel="stylesheet" href="/assets/js/shadowbox/shadowbox.css" media="screen" />
+
+<script type="text/javascript" src="/assets/js/jquery-1.6.2.js"></script>
+<script type="text/javascript" src="/assets/js/common.js"></script>
+
+<script type="text/javascript" src="/assets/js/shadowbox/shadowbox.js"></script>
+<script type="text/javascript" src="/assets/js/api_common.js"></script>
+<script type="text/javascript" src="/assets/js/api_google_picasa.js"></script>
+
+<script type="text/javascript">
+	$( document ).ready( function() { 
+		
+		//auto height
+		resizeSidebar();
+		
+		//load album onClick
+		$( "#album_list li a" )
+			.live( "click", function(){
+			
+				//load album
+				loadPhotoGrid( "album", $( this ).attr( "album_id" ), $( this ).attr( "user" ) );
+
+				//deactivate
+				deactivateAlbumList();
+
+				//activate
+				$( this ).parent().find( "div.album_list_checked" ).css( "display", "block" );
+				$( this ).parent().addClass( "active_selected" );
+				$( this ).addClass( "link_active_selected" );
+				$( this ).blur();
+			});
+
+		//change bg on hover
+		$( "#album_list li" )
+			.live( "mouseenter", function(){ $( this ).addClass( "active" ); $( this ).find( 'a' ).addClass( "link_active" ); } )
+			.live( "mouseleave", function(){ $( this ).removeClass( "active" ); $( this ).find( 'a' ).removeClass( "link_active" ); } );
+
+		$( ".grid_pic a" )
+			.live( "mouseenter", function(){ $( this ).parent().find( ".grid_pic_meta" ).slideDown( 300 ); });
+
+		$( ".grid td" )
+			.live( "mouseleave", function(){ $( ".grid_pic_meta" ).slideUp( 300 ); });
+
+		$( ".grid_pic_meta a" ).live( "click", function(){
+
+			var base_url_split = $( this ).attr( "href" ).toString().split( "#" );
+			var anchor_split = base_url_split[1].split( "/" );
+			 
+			loadAlbumList( $( this ) ); 
+			loadPhotoGrid( "album", anchor_split[1], anchor_split[0] ); 
+		});
+		
+		$( "#search_query" )
+			.click( function(){
+				
+				var cur_val = $.trim( $( this ).attr( "value" ).toLowerCase() );
+				var default_val = $.trim( $( this ).attr( "default_value" ).toLowerCase() );
+				var new_val = ( cur_val == default_val ) ? "" : cur_val;
+				$( this ).attr( "value", new_val );
+			})
+			
+			.keyup( function( event ) {
+				
+				var key = event.which.toString();
+				
+				if( key == "13" )
+				{
+					//save search
+					var cur_val = $( this ).attr( "value" );
+					cur_val = cur_val.replace( " ", "%20" );
+					var base_url_split = window.location.toString().split( "#" );
+					var base_url = base_url_split[0];
+					window.location = base_url + '#' + cur_val;
+					
+					//run search
+					loadPhotoGrid( "search", cur_val, false );
+					$( this ).blur();
+
+					//deactivate
+					deactivateAlbumList();
+				}
+				else
+				{
+					$( "#text_input_close" ).css( "display", "block" );
+				}	
+			});
+
+		$( "#search_query_submit" )
+		
+			.click( function( event ){
+				
+				event.preventDefault();
+				var el = $( "#search_query" );
+				var cur_val = $.trim( el.attr( "value" ).toLowerCase() );
+				var default_val = $.trim( el.attr( "default_value" ).toLowerCase() );
+				
+				if( cur_val != default_val && cur_val.length > 0 )
+				{	
+					//save search
+					cur_val = cur_val.replace( " ", "%20" );
+					var base_url_split = window.location.toString().split( "#" );
+					var base_url = base_url_split[0];
+					window.location = base_url + '#' + cur_val;
+
+					//run search
+					loadPhotoGrid( "search", cur_val, false );
+
+					//deactivate
+					deactivateAlbumList();
+				}
+				else
+				{
+					alert( "Please define a search term." );
+				}
+			});
+
+		$( "#search_toggle" ) .click( function( event ){ event.preventDefault(); toggleSearch( "show" ); });
+		$( "#sidebar_logo" ).click( function( event ){ event.preventDefault(); toggleSearch( "hide" ); });
+
+		$( ".sidebar_pages a" ).live( "click", function(){
+			
+			//get page num and list height
+			var page_height = getHeight( "#album_list_container", false );
+			var list_item_height = getHeight( "#album_list li", false );
+			var num_items = $( "#album_list" ).children().length;
+			var list_height = list_item_height * num_items;
+			var max_items_per_page = Math.floor( page_height/list_item_height );
+			var true_page_height = max_items_per_page * list_item_height;
+			//alert( "page_height: " + page_height + " li height: " + list_item_height + " total_list height: " + list_height );
+			
+			var href_split = $( this ).attr( "href" ).split( "/" );
+			var last_key = href_split.length - 1;
+			var page_num = href_split[last_key];   
+
+			//deactivate
+			$( ".sidebar_pagination a" ).removeClass( "active" );
+			$( this ).addClass( "active" );
+
+			//calc slide
+			var requested_position = page_num * true_page_height;
+			var scroll_to = ( requested_position * -1 ) + true_page_height;
+
+			//scroll list
+			$( "#album_slider" ).animate( { top:scroll_to.toString() }, 1000, function(){} );
+				
+		});
+
+		$( "#sidebar_pag_prev" )
+		
+			.live( "click", function( event ){
+				 
+				event.preventDefault();
+				scrollPageset( "prev" );				
+			});
+
+		$( "#sidebar_pag_next" )
+		
+			.live( "click", function( event ){
+
+				event.preventDefault();
+				scrollPageset( "next" );								 
+			});
+		
+		$( "#text_input_close" )
+		
+			.click(  function( event ){
+	
+				event.preventDefault();
+				$( "#search_query" ).attr( "value", "" );
+				$( this ).css( "display", "none" );
+				$( "#search_query" ).focus();
+			});
+		
+		//init shadowbox
+		Shadowbox.init({ 
+			continuous:true, 
+			handleOversize:'resize', 
+			overlayOpacity:0.8, 
+			overlayColor:'#000000',
+			displayNav:true,
+			counterType:'default',
+			modal:false
+		});
+	});
+	
+	$( window ).resize( function(){
+		
+		//auto height
+		resizeSidebar();
+		
+		//auto-resize photo
+		//resizeGridCell();
+	});
+	
+	$( window ).load( function() {
+
+		//load list of albums
+		loadAlbumList( false );
+
+		//if album id defined, load album
+		loadPhotoGrid( "album", false, false );
+	});
+	
+</script>
+
+</head>
+
+<body class="bg_tan">
+
+<!-- php vars -->
+<input type="hidden" id="root_url" value="http://local.wordpress.com" />
+<input type="hidden" id="pwa_username" value="colehafner" />
+<input type="hidden" id="max_pagesets" value="0" />
+<input type="hidden" id="cur_pageset" value="0" />
+<!-- end php vars -->
+
+<!-- start wrapper -->
+<div class="wrapper">
+	
+	<div class="sidebar_offset fl_left bg_tan">&nbsp;</div>
+
+	
+	<!-- content start -->
+	<div class="content fl_left bg_tan">
+<div id="content" class="pa_10">
+		Welcome to the main page...
+	</div>
+
+		
+		
+	</div>
+	<!-- content end -->
+	
+	<div class="clear"></div>
+
+</div>
+
+<!-- end wrapper -->
+
+<!-- start sidebar -->
+<div class="sidebar bg_black" id="sidebar">
+
+	<!-- begin header -->
+	<div class="sidebar_header_container" id="sidebar_header_container">
+	
+		<!-- begin padder -->
+		<div class="pa_15">
+		
+			<div class="sidebar_header" >
+				<a href="#" id="sidebar_logo">
+
+					<div class="sidebar_logo bg_green ma_10_right fl_left border_rounded al_center">
+						<span>N</span>
+						<div class="sidebar_logo_gloss border_rounded_top">&nbsp;</div>
+					</div>
+				</a>
+				
+				<div class="sidebar_title fl_left">Nifty Photo Viewer</div>
+				<div class="clear"></div>
+			</div>
+
+			
+			<div class="sidebar_search pa_20_top" id="sidebar_search">
+				<div class="sidebar_search_container">
+					<div class="text_input_icon">
+						<img src="/assets/img/icon_search.png" />
+					</div>
+					<input type="text" class="text_input" name="search_query" id="search_query" value="Search..." default_value="Search..." />
+					<a href="#" id="text_input_close" style="display:none;">
+						<div class="text_input_close_button bg_grey al_center">X</div>
+
+					</a>
+				</div>
+			</div>
+			
+			<div class="sidebar_search_toggle" id="search_toggle_container" style="display:none;">
+			
+				<div class="sidebar_pagination fl_left" id="sidebar_pagination">
+				
+					<div class="sidebar_label fl_left" id="sidebar_label">
+					</div>
+					
+					<div class="sidebar_pages_container fl_left" id="sidebar_pages_container" >
+						<div class="sidebar_pages" id="sidebar_pages"></div>
+
+					</div>
+					
+					<div class="sidebar_controls fl_right" id="sidebar_controls" style="display:none;">
+					
+						<a href="#" id="sidebar_pag_prev">
+							<div class="sidebar_pag_prev fl_left">
+								<img src="/assets/img/pag_prev_grey.gif" />
+							</div>
+						</a>
+						
+						<a href="#" id="sidebar_pag_next">
+							<div class="sidebar_pag_next fl_left">
+
+								<img src="/assets/img/pag_next_grey.gif" />
+							</div>
+						</a>
+					</div>
+					
+					<div class="clear"></div>
+				</div>
+				
+				<div class="sidebar_search_icon fl_right">
+					<a href ="#" id="search_toggle">
+						<img src="/assets/img/icon_search.png" />
+
+					</a>
+				</div>
+				
+				<div class="clear"></div>
+			</div>
+			
+		</div>
+		<!-- end padder -->
+		
+	</div>
+	<!-- end header -->
+	
+	<!-- begin album list -->
+
+	<div id="album_list_container" class="album_list_container pa_10_top">
+		<div class="album_slider" id="album_slider">
+		
+		</div>
+	</div>
+	<!-- end album list -->
+	
+	<!-- copyright info -->
+	<div class="sidebar_copy" id="sidebar_copy">
+		<div class="pa_10 al_center">
+			&copy; 2011 <a href="http://colehafner.com" target="_blank">Cole Hafner</a>&nbsp;&nbsp;|&nbsp;&nbsp; 
+			<a href="http://www.shadowbox-js.com/" target="_blank">Shadowbox.js</a>
+
+		</div>
+	</div>
+	<!-- end copyright info -->
+	
+</div>
+<!-- end sidebar -->
+			
+</body>
+
+</html>
